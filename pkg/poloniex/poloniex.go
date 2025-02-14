@@ -6,11 +6,31 @@ import (
 	"strconv"
 )
 
-var TradedSymbols = []string{"BTC_USDT", "TRX_USDT", "ETH_USDT", "DOGE_USDT", "BCH_USDT"}
+var Symbols = []string{"BTC_USDT", "TRX_USDT", "ETH_USDT", "DOGE_USDT", "BCH_USDT"}
+var Intervals = []string{"MINUTE_1", "MINUTE_15", "HOUR_1", "DAY_1"}
 
+const WssAPI = "wss://ws.poloniex.com/ws/public"
 const TradesChannel = "trades"
 
-const PublicAPI = "wss://ws.poloniex.com/ws/public"
+const RestAPI = "https://api.poloniex.com/markets/"
+const CandlesResource = "/candles"
+
+type Candle struct {
+	Low              string //lowest price over the interval
+	High             string //highest price over the interval
+	Open             string //price at the start time
+	Close            string //price at the end time
+	Amount           string //quote units traded over the interval
+	Quantity         string //base units traded over the interval
+	BuyTakerAmount   string //quote units traded over the interval filled by market buy orders
+	BuyTakerQuantity string //base units traded over the interval filled by market buy orders
+	TradeCount       int64  //count of trades
+	Ts               int64  //time the record was pushed
+	WeightedAverage  string //weighted average over the interval
+	Interval         string //the selected interval
+	StartTime        int64  //start time of interval
+	CoseTime         int64  //close time of interval
+}
 
 type Kline struct {
 	Pair      string  // название пары в Bitsgap
@@ -34,16 +54,6 @@ type VBS struct {
 type RecentTrade struct {
 	Channel string  `json:"channel"`
 	Data    []Trade `json:"data"`
-	// Data    []struct {
-	// 	Symbol     string `json:"symbol"`
-	// 	Amount     string `json:"amount"`
-	// 	Quantity   string `json:"quantity"`
-	// 	TakerSide  string `json:"takerSide"`
-	// 	CreateTime int64  `json:"createTime"`
-	// 	Price      string `json:"price"`
-	// 	ID         string `json:"id"`
-	// 	Ts         int64  `json:"ts"`
-	// } `json:"data"`
 }
 
 type Trade struct {
@@ -57,7 +67,7 @@ type Trade struct {
 	Ts         int64  `json:"ts"`
 }
 
-func (t *Trade) GetPrice() (float64, error) {
+func (t *Trade) getPrice() (float64, error) {
 
 	n, err := strconv.ParseFloat(t.Price, 64)
 	if err != nil {
@@ -68,7 +78,31 @@ func (t *Trade) GetPrice() (float64, error) {
 	return n, nil
 }
 
-func (t *Trade) GetAmount() (float64, error) {
+// reurn max of v and price
+func (t *Trade) HighPrice(v float64) float64 {
+	p, err := t.getPrice()
+	if err != nil {
+		if p > v {
+			return p
+		}
+		log.Println("Price value invalid:", err)
+	}
+	return v
+}
+
+// reurn min of v and price
+func (t *Trade) LowPrice(v float64) float64 {
+	p, err := t.getPrice()
+	if err != nil {
+		if p < v {
+			return p
+		}
+		log.Println("Price value invalid:", err)
+	}
+	return v
+}
+
+func (t *Trade) getAmount() (float64, error) {
 
 	n, err := strconv.ParseFloat(t.Amount, 64)
 	if err != nil {
@@ -79,7 +113,7 @@ func (t *Trade) GetAmount() (float64, error) {
 	return n, nil
 }
 
-func (t *Trade) GetQuantity() (float64, error) {
+func (t *Trade) getQuantity() (float64, error) {
 
 	n, err := strconv.ParseFloat(t.Quantity, 64)
 	if err != nil {
@@ -88,6 +122,60 @@ func (t *Trade) GetQuantity() (float64, error) {
 	}
 
 	return n, nil
+}
+
+func (t *Trade) BuyBase() float64 {
+	a, err := t.getAmount()
+	if err != nil {
+		log.Println("amount value invalid:", err)
+	}
+
+	if t.TakerSide == "sell" {
+		return 0
+	}
+
+	return a
+}
+
+func (t *Trade) SellBase() float64 {
+	a, err := t.getAmount()
+	if err != nil {
+		log.Println("amount value invalid:", err)
+	}
+
+	if t.TakerSide == "sell" {
+		return a
+	}
+
+	return 0
+}
+
+func (t *Trade) BuyQuote() float64 {
+	q, err := t.getQuantity()
+	if err != nil {
+		log.Println("amount value invalid:", err)
+	}
+
+	if t.TakerSide == "sell" {
+		return 0
+	}
+
+	return q
+
+}
+
+func (t *Trade) SellQuote() float64 {
+	q, err := t.getQuantity()
+	if err != nil {
+		log.Println("amount value invalid:", err)
+	}
+
+	if t.TakerSide == "sell" {
+		return q
+	}
+
+	return 0
+
 }
 
 func (t *Trade) GetSymbol() (string, error) {

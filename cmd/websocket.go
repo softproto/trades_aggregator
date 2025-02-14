@@ -12,10 +12,12 @@ import (
 	"github.com/gorilla/websocket"
 
 	"TradesAggregator/pkg/poloniex"
+
+	"TradesAggregator/internal/store"
 )
 
 func wsConnect() {
-	conn, _, err := websocket.DefaultDialer.Dial(poloniex.PublicAPI, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(poloniex.WssAPI, nil)
 	if err != nil {
 		log.Fatal("Dial() error:", err)
 	}
@@ -23,9 +25,9 @@ func wsConnect() {
 
 	//make quoted string from slice
 	var builder strings.Builder
-	for i, s := range poloniex.TradedSymbols {
+	for i, s := range poloniex.Symbols {
 		builder.WriteString(`"` + s + `"`)
-		if i < len(poloniex.TradedSymbols)-1 {
+		if i < len(poloniex.Symbols)-1 {
 			builder.WriteString(", ")
 		}
 	}
@@ -45,21 +47,53 @@ func wsConnect() {
 	pinger := time.NewTicker(20 * time.Second)
 	defer pinger.Stop()
 
-	// candle aggregator timer (1-minute interval)
-	candler := time.NewTicker(60 * time.Second)
-	defer candler.Stop()
+	// candle aggregator timers
+	candlerMinute1 := time.NewTicker(1 * time.Minute)
+	defer candlerMinute1.Stop()
+
+	candlerMinute15 := time.NewTicker(15 * time.Minute)
+	defer candlerMinute15.Stop()
+
+	candlerHour1 := time.NewTicker(1 * time.Hour)
+	defer candlerHour1.Stop()
+
+	candlerDay1 := time.NewTicker(24 * time.Hour)
+	defer candlerDay1.Stop()
 
 	// gracefull interruption
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	// just a trick to create the first candle for each pair
+	// just a trick to create the first candles for each pair
 	// in real life we ​​don't create candles at runtime
 	// instead we save trades (tick data) to the database
 	// and generate candles on demand
-	candle := make(map[string]poloniex.Kline)
-	for _, s := range poloniex.TradedSymbols {
-		candle[s] = poloniex.Kline{
+	candles_minute_1 := make(map[string]poloniex.Kline)
+	for _, s := range poloniex.Symbols {
+		candles_minute_1[s] = poloniex.Kline{
+			L:        999999,
+			UtcBegin: time.Now().Unix(),
+		}
+	}
+	candles_minute_15 := make(map[string]poloniex.Kline)
+	for _, s := range poloniex.Symbols {
+		candles_minute_15[s] = poloniex.Kline{
+			L:        999999,
+			UtcBegin: time.Now().Unix(),
+		}
+	}
+
+	candles_hour_1 := make(map[string]poloniex.Kline)
+	for _, s := range poloniex.Symbols {
+		candles_hour_1[s] = poloniex.Kline{
+			L:        999999,
+			UtcBegin: time.Now().Unix(),
+		}
+	}
+
+	candles_day_1 := make(map[string]poloniex.Kline)
+	for _, s := range poloniex.Symbols {
+		candles_day_1[s] = poloniex.Kline{
 			L:        999999,
 			UtcBegin: time.Now().Unix(),
 		}
@@ -76,12 +110,27 @@ func wsConnect() {
 				return
 			}
 
-			//make candle
-		case <-candler.C:
-			fmt.Println("Candler", candle)
-			fmt.Println(candle)
-			//clean map
-			candle = make(map[string]poloniex.Kline)
+			//make candle candles_minute_1
+		case <-candlerMinute1.C:
+			log.Println("candles_minute_1")
+
+			//make 1-minute candles
+			for _, s := range poloniex.Symbols {
+				c := candles_minute_1[s]
+				c.TimeFrame = "candles_minute_1"
+				c.UtcEnd = time.Now().Unix()
+
+				//store candle
+				store.Single(c)
+				fmt.Println(candles_minute_1)
+				//seting up new candle
+				c.UtcBegin = time.Now().Unix()
+				c.O = c.C
+				c.H = c.C
+				c.L = c.C
+				c.VolumeBS = poloniex.VBS{}
+
+			}
 
 			//close socket
 		case <-interrupt:
@@ -110,12 +159,19 @@ func wsConnect() {
 			if rt.Channel == "trades" && len(rt.Data) > 0 {
 				recent := rt.Data[0]
 
-				// candle[recent.Data[0].Symbol] =
-				p, _ := recent.GetPrice()
-				s, _ := recent.GetSymbol()
-				a, _ := recent.GetAmount()
+				c := candles_minute_1[recent.Symbol]
+				c.Pair = recent.Symbol
+				c.H = recent.HighPrice(c.H)
+				c.L = recent.LowPrice(c.L)
+				c.C = recent.HighPrice(0)
 
-				fmt.Println("--", s, p, a)
+				c.VolumeBS.BuyBase += recent.BuyBase()
+				c.VolumeBS.SellBase += recent.SellBase()
+
+				c.VolumeBS.BuyQuote += recent.BuyQuote()
+				c.VolumeBS.SellQuote += recent.SellQuote()
+
+				candles_minute_1[recent.Symbol] = c
 
 			}
 		}
