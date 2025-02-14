@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,7 +17,8 @@ import (
 	"TradesAggregator/internal/store"
 )
 
-func wsConnect() {
+func wsConnect(wg *sync.WaitGroup) {
+	defer wg.Done()
 	conn, _, err := websocket.DefaultDialer.Dial(poloniex.WssAPI, nil)
 	if err != nil {
 		log.Fatal("Dial() error:", err)
@@ -119,17 +121,66 @@ func wsConnect() {
 				c := candles_minute_1[s]
 				c.TimeFrame = "candles_minute_1"
 				c.UtcEnd = time.Now().Unix()
-
 				//store candle
 				store.Single(c)
-				fmt.Println(candles_minute_1)
 				//seting up new candle
 				c.UtcBegin = time.Now().Unix()
 				c.O = c.C
 				c.H = c.C
 				c.L = c.C
 				c.VolumeBS = poloniex.VBS{}
+			}
 
+			//make candle candles_minute_15
+		case <-candlerMinute15.C:
+			log.Println("candles_minute_15")
+			//make 15-minute candles
+			for _, s := range poloniex.Symbols {
+				c := candles_minute_15[s]
+				c.TimeFrame = "candles_minute_15"
+				c.UtcEnd = time.Now().Unix()
+				//store candle
+				store.Single(c)
+				//seting up new candle
+				c.UtcBegin = time.Now().Unix()
+				c.O = c.C
+				c.H = c.C
+				c.L = c.C
+				c.VolumeBS = poloniex.VBS{}
+			}
+
+		case <-candlerHour1.C:
+			log.Println("candles_hour_1")
+			//make 1-hour candles
+			for _, s := range poloniex.Symbols {
+				c := candles_hour_1[s]
+				c.TimeFrame = "candles_hour_1"
+				c.UtcEnd = time.Now().Unix()
+				//store candle
+				store.Single(c)
+				//seting up new candle
+				c.UtcBegin = time.Now().Unix()
+				c.O = c.C
+				c.H = c.C
+				c.L = c.C
+				c.VolumeBS = poloniex.VBS{}
+			}
+
+		case <-candlerDay1.C:
+			log.Println("candles_day_1")
+			//make 1-hour candles
+			for _, s := range poloniex.Symbols {
+				c := candles_day_1[s]
+				c.TimeFrame = "candles_day_1"
+				c.UtcEnd = time.Now().Unix()
+				//store candle
+				store.Single(c)
+				//seting up new candle
+				c.UtcBegin = time.Now().Unix()
+				c.O = c.C
+				c.H = c.C
+				c.L = c.C
+				c.VolumeBS = poloniex.VBS{}
 			}
 
 			//close socket
