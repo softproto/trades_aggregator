@@ -10,6 +10,8 @@ import (
 
 func main() {
 	log.Println("main() started")
+	store.InitDB()
+	store.CreateTable()
 
 	log.Println("fetch recent Klines")
 	startTime := time.Date(2024, time.December, 1, 0, 0, 0, 0, time.UTC).Unix()
