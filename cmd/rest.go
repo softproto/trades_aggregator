@@ -10,8 +10,9 @@ import (
 	"strings"
 )
 
-func fetchCandles(endpoint, resource, symbol, interval string) ([]poloniex.Kline, error) {
-	url := fmt.Sprintf("%s%s%s?interval=%s&limit=3", endpoint, symbol, resource, interval)
+func fetchKlines(endpoint, resource, symbol, interval string, startTime, endTime int64) ([]poloniex.Kline, error) {
+	kline := []poloniex.Kline{}
+	url := fmt.Sprintf("%s%s%s?interval=%s&startTime=%d&endTime=%d", endpoint, symbol, resource, interval, startTime, endTime)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -27,8 +28,8 @@ func fetchCandles(endpoint, resource, symbol, interval string) ([]poloniex.Kline
 	//some magic to prepare the string
 	b := strings.ReplaceAll(string(body), "\"", "")
 	parts := strings.Split(b[4:len(b)-4], " ], [ ")
-	candles := []poloniex.Kline{}
-	//
+
+	//cant avoid this
 	for _, part := range parts {
 		c := strings.Split(part, ", ")
 		k := poloniex.Kline{
@@ -47,11 +48,11 @@ func fetchCandles(endpoint, resource, symbol, interval string) ([]poloniex.Kline
 				SellQuote: toFloat64(c[5]) - toFloat64(c[7]),
 			},
 		}
-		candles = append(candles, k)
+		kline = append(kline, k)
 
 	}
 
-	return candles, nil
+	return kline, nil
 }
 
 func toInt64(s string) int64 {

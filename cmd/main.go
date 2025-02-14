@@ -3,13 +3,17 @@ package main
 import (
 	"TradesAggregator/internal/store"
 	"TradesAggregator/pkg/poloniex"
+	"time"
 )
 
 func main() {
-	//wsConnect()
-	candles, _ := fetchCandles(poloniex.RestAPI, poloniex.CandlesResource, "BTC_USDT", "MINUTE_1")
-	// for _, k := range candles {
-	// 	fmt.Println(k)
-	// }
-	store.Batch(candles)
+	startTime := time.Date(2024, time.December, 1, 0, 0, 0, 0, time.UTC).Unix()
+
+	for _, symbol := range poloniex.Symbols {
+		for _, interval := range poloniex.Intervals {
+			Klines, _ := fetchKlines(poloniex.RestAPI, poloniex.CandlesResource, symbol, interval, startTime, 0)
+			store.Batch(Klines)
+		}
+	}
+
 }

@@ -5,14 +5,13 @@ import (
 	"log"
 )
 
-
 func Single(c poloniex.Kline) {
 	log.Println(c)
 }
 
 func Batch(c []poloniex.Kline) {
 
-	for b := range c {
+	for _, b := range c {
 		log.Println(b)
 	}
 }
